@@ -1,6 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  experimental: {
+    agentUpgrade: "security",
+  },
   poweredByHeader: false,
   serverExternalPackages: ['zod', 'ai', '@ai-sdk/openai-compatible', '@ai-sdk/gateway', '@ai-sdk/provider-utils'],
   async headers() {
