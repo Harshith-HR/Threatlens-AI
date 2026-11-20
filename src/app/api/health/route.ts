@@ -31,14 +31,17 @@ export async function GET(request: Request) {
   }
   let mongoConnected = false;
   try {
-    await (await database()).command({ ping: 1 });
-    mongoConnected = true;
+    const db = await database();
+    if (db) {
+      await db.command({ ping: 1 });
+      mongoConnected = true;
+    }
   } catch {
     /* Report unavailable without exposing connection credentials. */
   }
   return Response.json({
     database: {
-      provider: "MongoDB",
+      provider: mongoConnected ? "MongoDB" : "File storage (MongoDB offline)",
       connected: mongoConnected,
       name: process.env.MONGODB_DB || "threatlens",
     },

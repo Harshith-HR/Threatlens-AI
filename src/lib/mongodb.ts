@@ -1,12 +1,20 @@
 import { MongoClient, type Db } from "mongodb";
 
-const cache = globalThis as unknown as { threatlensMongo?: Promise<Db> };
-export async function database(): Promise<Db> {
+const cache = globalThis as unknown as {
+  threatlensMongo?: Promise<Db | null>;
+};
+
+/**
+ * Returns the MongoDB Db handle, or null when MongoDB is not available.
+ * Callers must handle the null case and fall back to file-based storage.
+ */
+export async function database(): Promise<Db | null> {
   if (!cache.threatlensMongo) {
-    const client = new MongoClient(
-      process.env.MONGODB_URI || "mongodb://127.0.0.1:27017",
-      { serverSelectionTimeoutMS: 5000, maxPoolSize: 10 },
-    );
+    const uri = process.env.MONGODB_URI || "mongodb://127.0.0.1:27017";
+    const client = new MongoClient(uri, {
+      serverSelectionTimeoutMS: 3000,
+      maxPoolSize: 10,
+    });
     cache.threatlensMongo = client
       .connect()
       .then(async () => {
@@ -22,9 +30,8 @@ export async function database(): Promise<Db> {
       .catch(async () => {
         cache.threatlensMongo = undefined;
         await client.close().catch(() => {});
-        throw new Error(
-          "MongoDB unavailable. Check MONGODB_URI and ensure the database server is running.",
-        );
+        // Return null instead of throwing — callers use file-based fallback.
+        return null;
       });
   }
   return cache.threatlensMongo;
