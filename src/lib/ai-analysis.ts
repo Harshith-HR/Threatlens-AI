@@ -1,6 +1,7 @@
 import { generateText } from "ai";
 import { createOpenAICompatible } from "@ai-sdk/openai-compatible";
 import type { ScanSession } from "./scan-types";
+
 export async function analyzeWithAI(
   scan: ScanSession,
   signal: AbortSignal,
@@ -11,18 +12,20 @@ export async function analyzeWithAI(
       status: "skipped",
       text: "Add OPENROUTER_API_KEY to .env to enable AI analysis. Evidence and remediation are available without AI.",
     };
-  const model = process.env.OPENROUTER_MODEL || "openrouter/auto";
+
+  const model = process.env.OPENROUTER_MODEL || "google/gemini-2.5-flash";
   const provider = createOpenAICompatible({
     name: "openrouter",
     baseURL: "https://openrouter.ai/api/v1",
     apiKey: key,
   });
+
   try {
     const result = await generateText({
       model: provider.chatModel(model),
-      maxOutputTokens: 2200,
-      maxRetries: 0,
-      abortSignal: AbortSignal.any([signal, AbortSignal.timeout(45000)]),
+      maxOutputTokens: 2000,
+      maxRetries: 2,
+      abortSignal: AbortSignal.any([signal, AbortSignal.timeout(60000)]),
       instructions:
         "You are ThreatLens's Chief AI Security Analyst. Your analysis must be accessible to both business leaders (non-technical) and engineers (technical). Format your output in clean, structured Markdown with the following 4 distinct sections:\n\n" +
         "### 1. Executive Summary (For Non-Technical Leaders)\n" +
@@ -38,7 +41,7 @@ export async function analyzeWithAI(
         target: new URL(scan.target).origin,
         coverage: scan.coverage.slice(0, 2),
         findings: scan.findings
-          .slice(0, 60)
+          .slice(0, 40)
           .map((f) => ({
             id: f.id,
             title: f.title,
@@ -50,15 +53,18 @@ export async function analyzeWithAI(
         pages: scan.pages.length,
       }),
     });
-    if (!result.text.trim()) throw new Error("Empty response");
+
+    if (!result.text.trim()) throw new Error("Empty AI response received.");
     return { status: "complete", model, text: result.text };
-  } catch {
+  } catch (err) {
+    const errorMsg = err instanceof Error ? err.message : String(err);
+    console.error("AI Analysis error:", errorMsg);
     return {
       status: "failed",
       model,
       text: signal.aborted
         ? "AI analysis interrupted; scan evidence is retained."
-        : "AI analysis unavailable. Check the OpenRouter key, model, credits, and network access. Scan evidence is retained.",
+        : `AI analysis failed: ${errorMsg}. Scan evidence is retained.`,
     };
   }
 }
